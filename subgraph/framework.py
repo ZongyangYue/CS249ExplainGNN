@@ -22,7 +22,6 @@ import numpy as np
 
 import networkx as nx
 from torch_geometric import utils
-from itertools import combinations
 
 def expand(starts, ends, target, max_depth=1, prev=[]):
     node_neighbors = np.array([ends[idx] for idx, node in enumerate(starts) if node == target and ends[idx] != target])
@@ -34,27 +33,28 @@ def expand(starts, ends, target, max_depth=1, prev=[]):
     return np.array([node_neighbors[i] for i in sorted(indices)])
 
 
-def process_one_graph(data, draw=False):
+def process_one_graph(data):
     used = []
     num_nodes = data.x.shape[0]
     subgraph_sizes = [int(num_nodes/n) for n in range(2, 5)]
     start_nodes, end_nodes = np.array(data.edge_index)
+    sub_graphs = []
     # make a grow from each node
     for target_idx in range(num_nodes):
         nodes_to_keep = expand(starts=start_nodes, ends=end_nodes, target=target_idx, max_depth=3, prev=[])
+        if nodes_to_keep.shape[0] == 0:
+            continue
         for size in subgraph_sizes:
             # select the grows based on size
             _subset = nodes_to_keep[:size]
             # remove repetitive stuff
-            if list(set(_subset)) in used:
-                break
+            if set(_subset) in used:
+                continue
             else:
-                used.append(list(set(_subset)))
+                used.append(set(_subset))
             _subset = torch.from_numpy(np.array(_subset))
-            sub_data = data.subgraph(subset=_subset)
-            if draw:
-                nx.draw_networkx(utils.to_networkx(sub_data, remove_self_loops=True))
-                plt.show()
+            sub_graphs.append((target_idx, data.subgraph(subset=_subset)))
+    return sub_graphs
 
 
 if __name__ == "__main__":
@@ -63,5 +63,11 @@ if __name__ == "__main__":
     transform = T.Compose([T.GCNNorm(), T.NormalizeFeatures()])
     dataset = TUDataset(path, dataset, transform=transform)
 
-    for data in dataset:
-        process_one_graph(data, draw=True)
+    all_subgraphs = []
+    for data in tqdm.tqdm(dataset):
+        subgraphs = process_one_graph(data)
+        all_subgraphs.extend(subgraphs)
+    
+    for target_idx, graph in tqdm.tqdm(all_subgraphs):
+        nx.draw_networkx(utils.to_networkx(graph, remove_self_loops=True))
+        plt.show()
