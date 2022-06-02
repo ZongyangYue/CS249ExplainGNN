@@ -37,11 +37,15 @@ def mysubgraph(data, subset):
     out = subgraph(subset, data.edge_index, relabel_nodes=False,
                    num_nodes=data.num_nodes, return_edge_mask=True)
     edge_index, _, edge_mask = out
+    out2 = subgraph(subset, data.edge_index, relabel_nodes=True,
+                   num_nodes=data.num_nodes, return_edge_mask=True)
+    train_index, _, _ = out2
     if subset.dtype == torch.bool:
         num_nodes = int(subset.sum())
     else:
         num_nodes = subset.size(0) 
     _data = copy.copy(data)
+    # _data.train_index = train_index
     for key, value in _data:
         if key == 'edge_index':
             _data.edge_index = edge_index
@@ -52,6 +56,7 @@ def mysubgraph(data, subset):
                 _data[key] = value[subset]
             elif data.is_edge_attr(key):
                 _data[key] = value[edge_mask]
+    _data.train_index = train_index
     return _data
 
 def my_to_networkx(data, node_attrs=None, edge_attrs=None,
@@ -99,7 +104,7 @@ def my_to_networkx(data, node_attrs=None, edge_attrs=None,
 def process_one_graph(data):
     used = []
     num_nodes = data.x.shape[0]
-    subgraph_sizes = [int(num_nodes/5)]
+    subgraph_sizes = [int(num_nodes/2)]
     start_nodes, end_nodes = np.array(data.edge_index)
     sub_graphs = []
     # make a grow from each node
